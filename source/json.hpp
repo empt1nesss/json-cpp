@@ -3,7 +3,7 @@
 
 
 #include <string>
-#include <list>
+#include <vector>
 #include <initializer_list>
 
 
@@ -25,14 +25,19 @@ public:
   class Property;
   class Value;
 
+  typedef std::vector<Property> StructType;
+  typedef std::vector<Value>    ListType;
+
   Json();
   ~Json();
 
 
-  void FromProperties(const std::list<Property> &properties);
-  void FromJsonString(const std::wstring        &json_string);
+  void FromProperties(const StructType   &properties);
+  void FromJsonString(const std::string  &json_string);
+  void FromJsonString(const std::wstring &json_string);
 
-  std::wstring  Serialize      (                        ) const;
+  std::string   Serialize      ()                         const;
+  std::wstring  SerializeW     ()                         const;
   bool          SerializeToFile(const std::wstring &path) const;
   bool          SerializeToFile(const std::string  &path) const;
 
@@ -58,6 +63,8 @@ private:
   static void deserialize_value(
     const std::wstring &json_str, Json::Value *val
   );
+
+  static std::string to_str(const std::wstring &wstr);
 
 };
 

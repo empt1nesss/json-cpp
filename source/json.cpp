@@ -9,7 +9,7 @@
 
 
 Json::Json() :
-  m_properties(new Value(std::list<Property>()))
+  m_properties(new Value(StructType()))
 {}
 
 Json::~Json()
@@ -18,9 +18,14 @@ Json::~Json()
 }
 
 
-void Json::FromProperties(const std::list<Property> &properties)
+void Json::FromProperties(const StructType &properties)
 {
   *m_properties = properties;
+}
+
+void Json::FromJsonString(const std::string &json_string)
+{
+  deserialize_value(std::wstring(json_string.begin(), json_string.end()), m_properties);
 }
 
 void Json::FromJsonString(const std::wstring &json_string)
@@ -28,8 +33,12 @@ void Json::FromJsonString(const std::wstring &json_string)
   deserialize_value(json_string, m_properties);
 }
 
+std::string Json::Serialize() const
+{
+  return to_str(serialize_value(*m_properties));
+}
 
-std::wstring Json::Serialize() const
+std::wstring Json::SerializeW() const
 {
   return serialize_value(*m_properties);
 }
@@ -41,7 +50,7 @@ bool Json::SerializeToFile(const std::wstring &path) const
   if (!file.is_open())
     return false;
 
-  file << Serialize();
+  file << SerializeW();
   file.close();
   return true;
 }
@@ -74,13 +83,13 @@ std::wstring Json::serialize_value(const Json::Value &val)
   case Json::List: {
     std::wstring out = L"[";
 
-    if (((std::list<Json::Value>*)val.value)->size() != 0) {
+    if (((ListType*)val.value)->size() != 0) {
       out += serialize_value(
-        *(*(std::list<Json::Value>*)val.value).begin()
+        *(*(ListType*)val.value).begin()
       );
       for (
-        auto it = ++((std::list<Json::Value>*)val.value)->begin();
-        it != ((std::list<Json::Value>*)val.value)->end();
+        auto it = ++((ListType*)val.value)->begin();
+        it != ((ListType*)val.value)->end();
         ++it
       ) {
         out += L"," + serialize_value(*it);
@@ -92,13 +101,13 @@ std::wstring Json::serialize_value(const Json::Value &val)
   case Json::Struct: {
     std::wstring out = L"{";
 
-    if (((std::list<Json::Property>*)val.value)->size() != 0) {
+    if (((StructType*)val.value)->size() != 0) {
       out += serialize_property(
-        *(*(std::list<Json::Property>*)val.value).begin()
+        *(*(StructType*)val.value).begin()
       );
       for (
-        auto it = ++((std::list<Json::Property>*)val.value)->begin();
-        it != ((std::list<Json::Property>*)val.value)->end();
+        auto it = ++((StructType*)val.value)->begin();
+        it != ((StructType*)val.value)->end();
         ++it
       ) {
         out += L"," + serialize_property(*it);
@@ -198,7 +207,7 @@ void Json::deserialize_value(
   }
   else if (json_str[0] == L'[') {
     val->type   = Json::List;
-    val->value  = new std::list<Json::Value>;
+    val->value  = new ListType;
     
     bool empty = true;
     for (size_t i = 1; i < json_str.size(); ++i) {
@@ -242,7 +251,7 @@ void Json::deserialize_value(
       else if (*it == L',' && !quote && square_bracket == 0 && curly_bracket == 0) {
         Json::Value _val;
         deserialize_value(std::wstring(val_st, it), &_val);
-        ((std::list<Json::Value>*)(val->value))->push_back(_val);
+        ((ListType*)(val->value))->push_back(_val);
         val_st = json_str.end();
       }
     }
@@ -254,11 +263,11 @@ void Json::deserialize_value(
 
     Json::Value _val;
     deserialize_value(std::wstring(val_st, val_end), &_val);
-    ((std::list<Json::Value>*)(val->value))->push_back(_val);
+    ((ListType*)(val->value))->push_back(_val);
   }
   else if (json_str[0] == L'{') {
     val->type   = Json::Struct;
-    val->value  = new std::list<Json::Property>;
+    val->value  = new StructType;
 
     bool empty = true;
     for (size_t i = 1; i < json_str.size(); ++i) {
@@ -303,7 +312,7 @@ void Json::deserialize_value(
         Json::Property _prop(L"", Json::Value());
         deserialize_property(std::wstring(prop_st, it), &_prop);
   
-        ((std::list<Json::Property>*)(val->value))->push_back(_prop);
+        ((StructType*)(val->value))->push_back(_prop);
         prop_st = json_str.end();
       }
     }
@@ -315,7 +324,7 @@ void Json::deserialize_value(
 
     Json::Property _prop(L"", Json::Value());
     deserialize_property(std::wstring(prop_st, prop_end), &_prop);
-    ((std::list<Json::Property>*)(val->value))->push_back(_prop);
+    ((StructType*)(val->value))->push_back(_prop);
   }
 }
 
@@ -414,5 +423,18 @@ std::wstring Json::format_out(std::wstring str)
   }
 
   return str;
+}
+
+std::string Json::to_str(const std::wstring &wstr)
+{
+  std::string out(wstr.size(), '\0');
+  for (size_t i = 0; i < wstr.size(); ++i) {
+    if (wstr[i] > 127)
+      out[i] = '?';
+    else
+     out[i] = wstr[i];
+  }
+
+  return out;
 }
 

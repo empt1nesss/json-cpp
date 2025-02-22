@@ -4,6 +4,8 @@
 
 #include "json.hpp"
 
+#include <functional>
+
 
 class Json::Value
 {
@@ -11,45 +13,49 @@ public:
 
   enum ERR
   {
-    NotProperties,
-    NotFound
+    NotFound,
+    NotList,
+    NotStruct
   };
 
 
   Value(const Value &val);
 
   Value();
-  Value(bool                                    val);
-  Value(const std::string                     & val);
-  Value(const std::wstring                    & val);
-  Value(const std::list<Value>                & val);
-  Value(const std::initializer_list<Value>    & val);
-  Value(const std::list<Property>             & val);
-  Value(const std::initializer_list<Property> & val);
+  Value(bool                                   val);
+  Value(const std::string                     &val);
+  Value(const std::wstring                    &val);
+  Value(const ListType                        &val);
+  Value(const std::initializer_list<Value>    &val);
+  Value(const StructType                      &val);
+  Value(const std::initializer_list<Property> &val);
 
-
-  template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-  explicit Value(T val)
+  template <
+    typename T,
+    typename = std::enable_if_t<
+      std::is_integral_v<T> || std::is_floating_point_v<T>
+    >
+  >
+  Value(T val)
   {
-    type  = Int;
-    value = new int64_t(val);
+    if (std::is_integral_v<T>) {
+      type  = Int;
+      value = new int64_t(val);
+    }
+    else {
+      type  = Float;
+      value = new double(val);
+    }
   }
 
-  template<typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
-  explicit Value(double val)
-  {
-    type  = Float;
-    value = new double(val);
-  }
+  template <typename It>
+  Value(It it_first, It it_last);
 
-  template <typename Iterator>
-  Value(Iterator it_first, Iterator it_last, bool is_list);
+  template <typename It, typename T>
+  Value(It it_first, It it_last, const std::function<Value(T &val)> &to_value);
 
-  template <typename T, typename ToValue>
-  Value(const std::list<T> &list, ToValue to_value);
-
-  template <typename Iterator, typename ToValue>
-  Value(Iterator it_first, Iterator it_last, ToValue to_value);
+  template <typename It, typename T>
+  Value(It it_first, It it_last, const std::function<Property(T &val)> &to_prop);
 
   ~Value();
 
@@ -58,17 +64,33 @@ public:
 
   ValueType GetType() { return type; } const
 
-  bool                GetBool()   const { return *(bool*)value; }
-  int64_t             GetInt ()   const { return *(int64_t*)value; }
-  double              GetFloat()  const { return *(double*)value; }
-  std::wstring        GetString() const { return *(std::wstring*)value; }
-  std::list<Value>    GetList()   const { return *(std::list<Value>*)value; }
-  std::list<Property> GetStruct() const { return *(std::list<Property>*)value; }
+  bool         GetBool   () const { return *(bool*)value; }
+  int64_t      GetInt    () const { return *(int64_t*)value; }
+  double       GetFloat  () const { return *(double*)value; }
+  std::string  GetString () const { return Json::to_str(*(std::wstring*)value); }
+  std::wstring GetStringW() const { return *(std::wstring*)value; }
+  ListType     GetList   () const { return *(ListType*)value; }
+  StructType   GetStruct () const { return *(StructType*)value; }
+
+  void RemoveProperty(const std::string  &name);
+  void RemoveProperty(const std::wstring &name);
 
 
-  Value&        operator=  (const Value        &val);
+  Value& operator=(const Value &val);
+
+  template <typename T>
+  Value& operator=(T val)
+  {
+    return *this = Value(val);
+  }
+
+  Value&        operator[] (const std::string  &prop_name);
+  const Value&  operator[] (const std::string  &prop_name) const;
   Value&        operator[] (const std::wstring &prop_name);
   const Value&  operator[] (const std::wstring &prop_name) const;
+
+  Value&        operator[] (size_t i);
+  const Value&  operator[] (size_t i) const;
   
 private:
 
@@ -88,42 +110,52 @@ private:
 
 };
 
-
-template <typename Iterator>
-Json::Value::Value(Iterator it_first, Iterator it_last, bool is_list)
+template <typename It>
+Json::Value::Value(It it_first, It it_last)
 {
-  if (is_list) {
+  using value_type = typename std::iterator_traits<It>::value_type;
+  static_assert(
+    std::is_same_v<value_type, Value>    ||
+    std::is_same_v<value_type, Property>,
+    "Iterator value type must be "
+    "Json::Value or Json::Property"
+  );
+
+  if constexpr (std::is_same_v<value_type, Value>) {
     type  = List;
-    value = new std::list<Value>;
+    value = new ListType;
 
     for (; it_first != it_last; ++it_first)
-      ((std::list<Value>*)value)->push_back(*it_first);
+      ((ListType*)value)->push_back(*it_first);
   }
   else {
     type  = Struct;
-    value = new std::list<Property>;
+    value = new StructType;
 
     for (; it_first != it_last; ++it_first)
-      ((std::list<Property>*)value)->push_back(*it_first);
+      ((StructType*)value)->push_back(*it_first);
   }
 }
 
-template <typename T, typename ToValue>
-Json::Value::Value(const std::list<T> &list, ToValue to_value)
+template <typename It, typename T>
+Json::Value::Value(It it_first, It it_last, const std::function<Value(T &val)> &to_value)
 {
   type  = List;
-  value = new std::list<Value>;
-  for (auto & val : list)
-    ((std::list<Value>*)value)->push_back(to_value(val));
+  value = new ListType;
+  for (; it_first != it_last; ++it_first)
+    ((ListType*)value)->push_back(to_value(*it_first));
 }
 
-template <typename Iterator, typename ToValue>
-Json::Value::Value(Iterator it_first, Iterator it_last, ToValue to_value)
+
+template <typename It, typename T>
+Json::Value::Value(
+  It it_first, It it_last, const std::function<Property(T &val)> &to_prop
+)
 {
-  type  = List;
-  value = new std::list<Value>;
+  type  = Struct;
+  value = new StructType;
   for (; it_first != it_last; ++it_first)
-    ((std::list<Value>*)value)->push_back(to_value(*it_first));
+    ((StructType*)value)->push_back(to_prop(*it_first));
 }
 
 

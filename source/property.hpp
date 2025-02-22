@@ -17,8 +17,8 @@ public:
   Property(const std::string  &name, const Value &val);
 
 
-  Value&        GetData()       { return m_value; }
-  const Value&  GetData() const { return m_value; }
+  Value&        GetValue()       { return m_value; }
+  const Value&  GetValue() const { return m_value; }
 
 private:
 

@@ -29,10 +29,11 @@ int main()
   Json j;
 
   j.FromProperties({
-    { "c", c.Serialize() }
+    { "coords", c.Serialize() }
   });
+  j.GetData()["five"] = 5;
 
-  std::wcout << j.Serialize();
+  std::cout << j.Serialize();
 
   return 0;
 }
