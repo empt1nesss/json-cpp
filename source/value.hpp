@@ -20,14 +20,27 @@ public:
 
   Value();
   Value(bool                                    val);
-  Value(int64_t                                 val);
-  Value(double                                  val);
   Value(const std::string                     & val);
   Value(const std::wstring                    & val);
   Value(const std::list<Value>                & val);
   Value(const std::initializer_list<Value>    & val);
   Value(const std::list<Property>             & val);
   Value(const std::initializer_list<Property> & val);
+
+
+  template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+  explicit Value(T val)
+  {
+    type  = Int;
+    value = new int64_t(val);
+  }
+
+  template<typename T, typename = std::enable_if_t<std::is_floating_point_v<T>>>
+  explicit Value(double val)
+  {
+    type  = Float;
+    value = new double(val);
+  }
 
   template <typename Iterator>
   Value(Iterator it_first, Iterator it_last, bool is_list);

@@ -49,18 +49,6 @@ Json::Value::Value(bool val)
   value = new bool(val);
 }
 
-Json::Value::Value(int64_t val)
-{
-  type  = Int;
-  value = new int64_t(val);
-}
-
-Json::Value::Value(double val)
-{
-  type  = Float;
-  value = new double(val);
-}
-
 Json::Value::Value(const std::string &val)
 {
   type  = String;

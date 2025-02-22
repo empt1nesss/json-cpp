@@ -15,8 +15,8 @@ struct Coords
   Json::Value Serialize()
   {
     return {
-      Json::Property(L"x", (int64_t)x),
-      Json::Property(L"x", (int64_t)y)
+      Json::Property("x", x),
+      Json::Property("y", y)
     };
   }
 };
@@ -29,7 +29,7 @@ int main()
   Json j;
 
   j.FromProperties({
-    { L"c", c.Serialize() }
+    { "c", c.Serialize() }
   });
 
   std::wcout << j.Serialize();
