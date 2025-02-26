@@ -45,10 +45,25 @@ Json::Value::Value(bool val)
   value = new bool(val);
 }
 
+Json::Value::Value(const char *val)
+{
+  std::string t(val);
+
+  type  = String;
+  value = new std::wstring(t.begin(), t.end());
+
+}
+
 Json::Value::Value(const std::string &val)
 {
   type  = String;
   value = new std::wstring(val.begin(), val.end());
+}
+
+Json::Value::Value(const wchar_t *val)
+{
+  type  = String;
+  value = new std::wstring(val);
 }
 
 Json::Value::Value(const std::wstring &val)

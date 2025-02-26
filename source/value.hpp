@@ -23,7 +23,9 @@ public:
 
   Value();
   Value(bool                                   val);
+  Value(const char                            *val);
   Value(const std::string                     &val);
+  Value(const wchar_t                         *val);
   Value(const std::wstring                    &val);
   Value(const ListType                        &val);
   Value(const std::initializer_list<Value>    &val);
@@ -33,7 +35,8 @@ public:
   template <
     typename T,
     typename = std::enable_if_t<
-      std::is_integral_v<T> || std::is_floating_point_v<T>
+      std::is_integral_v<T>       ||
+      std::is_floating_point_v<T>
     >
   >
   Value(T val)
