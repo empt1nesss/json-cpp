@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <fstream>
 #include <filesystem>
+#include <filesystem>
+#include <locale>
 
 
 Json::Json() :
@@ -21,6 +23,26 @@ Json::~Json()
 void Json::FromProperties(const StructType &properties)
 {
   *m_properties = properties;
+}
+
+bool Json::FromFile(const std::string &path)
+{
+  return FromFile(std::wstring(path.begin(), path.end()));
+}
+
+bool Json::FromFile(const std::wstring &path)
+{
+  std::wifstream file(std::filesystem::path(path.c_str()));
+  file.imbue(std::locale("en_US.UTF-8"));
+  if (!file.is_open())
+    return false;
+
+  std::wstring json_str;
+  for (std::wstring line; std::getline(file, line);)
+    json_str += line + L'\n';
+
+  FromJsonString(json_str);
+  return true;
 }
 
 void Json::FromJsonString(const std::string &json_string)
@@ -43,6 +65,11 @@ std::wstring Json::SerializeW() const
   return serialize_value(*m_properties);
 }
 
+bool Json::SerializeToFile(const std::string &path) const
+{
+  return SerializeToFile(std::wstring(path.begin(), path.end()));
+}
+
 bool Json::SerializeToFile(const std::wstring &path) const
 {
   std::wofstream file(std::filesystem::path(path.c_str()));
@@ -53,11 +80,6 @@ bool Json::SerializeToFile(const std::wstring &path) const
   file << SerializeW();
   file.close();
   return true;
-}
-
-bool Json::SerializeToFile(const std::string &path) const
-{
-  return SerializeToFile(std::wstring(path.begin(), path.end()));
 }
 
 

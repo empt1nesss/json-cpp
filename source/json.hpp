@@ -33,6 +33,8 @@ public:
 
 
   void FromProperties(const StructType   &properties);
+  bool FromFile      (const std::string  &path);
+  bool FromFile      (const std::wstring &path);
   void FromJsonString(const std::string  &json_string);
   void FromJsonString(const std::wstring &json_string);
 
