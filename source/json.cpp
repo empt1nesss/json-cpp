@@ -214,7 +214,7 @@ void Json::deserialize_value(
   else if (json_str == L"true") {
     *val = Json::Value(true);
   }
-  else if (json_str[0] >= L'0' && json_str[0] <= L'9') {
+  else if ((json_str[0] >= L'0' && json_str[0] <= L'9') || json_str[0] == L'-') {
     if (json_str.find(L'.') == json_str.npos) {
       *val = Json::Value((int64_t)std::stoll(json_str));
     }
