@@ -91,27 +91,27 @@ std::wstring Json::serialize_property(const Json::Property &prop)
 
 std::wstring Json::serialize_value(const Json::Value &val)
 {
-  switch (val.type)
+  switch (val.m_type)
   {
   case Json::Bool:
-    return *(bool*)val.value ? L"true" : L"false";
+    return *(bool*)val.m_value ? L"true" : L"false";
   case Json::Int:
-    return std::to_wstring(*(int64_t*)val.value);
+    return std::to_wstring(*(int64_t*)val.m_value);
   case Json::Float:
-    return std::to_wstring(*(double*)val.value);
+    return std::to_wstring(*(double*)val.m_value);
   case Json::String: {
-    return L"\"" + format_out(*(std::wstring*)val.value) + L"\"";
+    return L"\"" + format_out(*(std::wstring*)val.m_value) + L"\"";
   }
   case Json::List: {
     std::wstring out = L"[";
 
-    if (((ListType*)val.value)->size() != 0) {
+    if (((ListType*)val.m_value)->size() != 0) {
       out += serialize_value(
-        *(*(ListType*)val.value).begin()
+        *(*(ListType*)val.m_value).begin()
       );
       for (
-        auto it = ++((ListType*)val.value)->begin();
-        it != ((ListType*)val.value)->end();
+        auto it = ++((ListType*)val.m_value)->begin();
+        it != ((ListType*)val.m_value)->end();
         ++it
       ) {
         out += L"," + serialize_value(*it);
@@ -123,13 +123,13 @@ std::wstring Json::serialize_value(const Json::Value &val)
   case Json::Struct: {
     std::wstring out = L"{";
 
-    if (((StructType*)val.value)->size() != 0) {
+    if (((StructType*)val.m_value)->size() != 0) {
       out += serialize_property(
-        *(*(StructType*)val.value).begin()
+        *(*(StructType*)val.m_value).begin()
       );
       for (
-        auto it = ++((StructType*)val.value)->begin();
-        it != ((StructType*)val.value)->end();
+        auto it = ++((StructType*)val.m_value)->begin();
+        it != ((StructType*)val.m_value)->end();
         ++it
       ) {
         out += L"," + serialize_property(*it);
@@ -223,13 +223,13 @@ void Json::deserialize_value(
     }
   }
   else if (json_str[0] == L'\"') {
-    val->type = Json::String;
-    val->value = new std::wstring(json_str.begin() + 1, json_str.end() - 1);
-    *(std::wstring*)val->value = format_in(*(std::wstring*)val->value);
+    val->m_type = Json::String;
+    val->m_value = new std::wstring(json_str.begin() + 1, json_str.end() - 1);
+    *(std::wstring*)val->m_value = format_in(*(std::wstring*)val->m_value);
   }
   else if (json_str[0] == L'[') {
-    val->type   = Json::List;
-    val->value  = new ListType;
+    val->m_type   = Json::List;
+    val->m_value  = new ListType;
     
     bool empty = true;
     for (size_t i = 1; i < json_str.size(); ++i) {
@@ -273,7 +273,7 @@ void Json::deserialize_value(
       else if (*it == L',' && !quote && square_bracket == 0 && curly_bracket == 0) {
         Json::Value _val;
         deserialize_value(std::wstring(val_st, it), &_val);
-        ((ListType*)(val->value))->push_back(_val);
+        ((ListType*)(val->m_value))->push_back(_val);
         val_st = json_str.end();
       }
     }
@@ -285,11 +285,11 @@ void Json::deserialize_value(
 
     Json::Value _val;
     deserialize_value(std::wstring(val_st, val_end), &_val);
-    ((ListType*)(val->value))->push_back(_val);
+    ((ListType*)(val->m_value))->push_back(_val);
   }
   else if (json_str[0] == L'{') {
-    val->type   = Json::Struct;
-    val->value  = new StructType;
+    val->m_type   = Json::Struct;
+    val->m_value  = new StructType;
 
     bool empty = true;
     for (size_t i = 1; i < json_str.size(); ++i) {
@@ -334,7 +334,7 @@ void Json::deserialize_value(
         Json::Property _prop(L"", Json::Value());
         deserialize_property(std::wstring(prop_st, it), &_prop);
   
-        ((StructType*)(val->value))->push_back(_prop);
+        ((StructType*)(val->m_value))->push_back(_prop);
         prop_st = json_str.end();
       }
     }
@@ -346,7 +346,7 @@ void Json::deserialize_value(
 
     Json::Property _prop(L"", Json::Value());
     deserialize_property(std::wstring(prop_st, prop_end), &_prop);
-    ((StructType*)(val->value))->push_back(_prop);
+    ((StructType*)(val->m_value))->push_back(_prop);
   }
 }
 

@@ -6,26 +6,26 @@
 
 Json::Value::Value(const Value &val)
 {
-  type = val.type;
-  switch (val.type)
+  m_type = val.m_type;
+  switch (val.m_type)
   {
   case Bool:
-    value = new bool(*(bool*)val.value);
+    m_value = new bool(*(bool*)val.m_value);
     break;
   case Int:
-    value = new int64_t(*(int64_t*)val.value);
+    m_value = new int64_t(*(int64_t*)val.m_value);
     break;
   case Float:
-    value = new double(*(double*)val.value);
+    m_value = new double(*(double*)val.m_value);
     break;
   case String:
-    value = new std::wstring(*(std::wstring*)val.value);
+    m_value = new std::wstring(*(std::wstring*)val.m_value);
     break;
   case List:
-    value = new ListType(*(ListType*)val.value);
+    m_value = new ListType(*(ListType*)val.m_value);
     break;
   case Struct:
-    value = new StructType(*(StructType*)val.value);
+    m_value = new StructType(*(StructType*)val.m_value);
     break;
   default:
     break;
@@ -35,65 +35,65 @@ Json::Value::Value(const Value &val)
 
 Json::Value::Value()
 {
-  type  = Null;
-  value = nullptr;
+  m_type  = Null;
+  m_value = nullptr;
 }
 
 Json::Value::Value(bool val)
 {
-  type  = Bool;
-  value = new bool(val);
+  m_type  = Bool;
+  m_value = new bool(val);
 }
 
 Json::Value::Value(const char *val)
 {
   std::string t(val);
 
-  type  = String;
-  value = new std::wstring(t.begin(), t.end());
+  m_type  = String;
+  m_value = new std::wstring(t.begin(), t.end());
 
 }
 
 Json::Value::Value(const std::string &val)
 {
-  type  = String;
-  value = new std::wstring(val.begin(), val.end());
+  m_type  = String;
+  m_value = new std::wstring(val.begin(), val.end());
 }
 
 Json::Value::Value(const wchar_t *val)
 {
-  type  = String;
-  value = new std::wstring(val);
+  m_type  = String;
+  m_value = new std::wstring(val);
 }
 
 Json::Value::Value(const std::wstring &val)
 {
-  type  = String;
-  value = new std::wstring(val);
+  m_type  = String;
+  m_value = new std::wstring(val);
 }
 
 Json::Value::Value(const ListType &val)
 {
-  type  = List;
-  value = new ListType(val);
+  m_type  = List;
+  m_value = new ListType(val);
 }
 
 Json::Value::Value(const std::initializer_list<Value> &val)
 {
-  type  = List;
-  value = new ListType(val);
+  m_type  = List;
+  m_value = new ListType(val);
 }
 
 Json::Value::Value(const StructType &val)
 {
-  type  = Struct;
-  value = new StructType(val);
+  m_type  = Struct;
+  m_value = new StructType(val);
 }
 
 Json::Value::Value(const std::initializer_list<Property> &val)
 {
-  type  = Struct;
-  value = new StructType(val);
+  m_type  = Struct;
+  m_value = new StructType(val);
 }
 
 
@@ -105,14 +105,71 @@ Json::Value::~Value()
 
 bool Json::Value::Contains(const std::wstring &prop_name) const
 {
-  if (type != Struct)
+  if (m_type != Struct)
     return false;
 
-  for (auto &prop : *(StructType*)value)
+  for (auto &prop : *(StructType*)m_value)
     if (prop.Name == prop_name)
       return true;
 
   return false;
+}
+
+
+bool Json::Value::GetBool() const
+{
+  if (m_type != Bool)
+    throw WrongType;
+
+  return *(bool*)m_value;
+}
+
+int64_t Json::Value::GetInt() const
+{
+  if (m_type != Int)
+    throw WrongType;
+
+  return *(int64_t*)m_value;
+}
+
+double Json::Value::GetFloat() const
+{
+  if (m_type != Float)
+    throw WrongType;
+
+  return *(double*)m_value;
+}
+
+std::string Json::Value::GetString() const
+{
+  if (m_type != String)
+    throw WrongType;
+
+  return Json::to_str(*(std::wstring*)m_value);
+}
+
+std::wstring Json::Value::GetStringW() const
+{
+  if (m_type != String)
+    throw WrongType;
+
+  return *(std::wstring*)m_value;
+}
+
+Json::ListType Json::Value::GetList() const
+{
+  if (m_type != List)
+    throw WrongType;
+
+  return *(ListType*)m_value;
+}
+
+Json::StructType Json::Value::GetStruct() const
+{
+  if (m_type != Struct)
+    throw WrongType;
+
+  return *(StructType*)m_value;
 }
 
 
@@ -123,46 +180,46 @@ void Json::Value::RemoveProperty(const std::string &name)
 
 void Json::Value::RemoveProperty(const std::wstring &name)
 {
-  if (type != Struct)
+  if (m_type != Struct)
     throw NotStruct;
 
   auto f = std::find_if(
-    ((StructType*)value)->begin(),
-    ((StructType*)value)->end(),
+    ((StructType*)m_value)->begin(),
+    ((StructType*)m_value)->end(),
     [&](const Property &p_prop)
     {
       return p_prop.Name == name;
     }
   );
-  if (f == ((StructType*)value)->end())
+  if (f == ((StructType*)m_value)->end())
     throw NotFound;
   
-  ((StructType*)value)->erase(f);
+  ((StructType*)m_value)->erase(f);
 }
 
 
 Json::Value& Json::Value::operator=(const Json::Value& val)
 {
-  type = val.type;
-  switch (val.type)
+  m_type = val.m_type;
+  switch (val.m_type)
   {
   case Bool:
-    value = new bool(*(bool*)val.value);
+    m_value = new bool(*(bool*)val.m_value);
     break;
   case Int:
-    value = new int64_t(*(int64_t*)val.value);
+    m_value = new int64_t(*(int64_t*)val.m_value);
     break;
   case Float:
-    value = new double(*(double*)val.value);
+    m_value = new double(*(double*)val.m_value);
     break;
   case String:
-    value = new std::wstring(*(std::wstring*)val.value);
+    m_value = new std::wstring(*(std::wstring*)val.m_value);
     break;
   case List:
-    value = new ListType(*(ListType*)val.value);
+    m_value = new ListType(*(ListType*)val.m_value);
     break;
   case Struct:
-    value = new StructType(*(StructType*)val.value);
+    m_value = new StructType(*(StructType*)val.m_value);
     break;
   default:
     break;
@@ -183,80 +240,85 @@ const Json::Value& Json::Value::operator[](const std::string &prop_name) const
 
 Json::Value& Json::Value::operator[](const std::wstring &prop_name)
 {
-  if (type != Struct)
+  if (m_type != Struct)
     throw NotStruct;
 
-  for (auto &prop : *(StructType*)value)
+  for (auto &prop : *(StructType*)m_value)
     if (prop.Name == prop_name)
       return prop.GetValue();
 
-  ((StructType*)value)->push_back(Property(prop_name, Value()));
-  return (((StructType*)value)->end() - 1)->GetValue();
+  ((StructType*)m_value)->push_back(Property(prop_name, Value()));
+  return (((StructType*)m_value)->end() - 1)->GetValue();
 }
 
 const Json::Value& Json::Value::operator[](const std::wstring &prop_name) const
 {
-  if (type != Struct)
+  if (m_type != Struct)
     throw NotStruct;
 
-  for (auto const &prop : *(StructType*)value)
+  for (auto const &prop : *(StructType*)m_value)
     if (prop.Name == prop_name)
       return prop.GetValue();
-
-  ((StructType*)value)->push_back(Property(prop_name, Value()));
-  return (((StructType*)value)->end() - 1)->GetValue();
+  
+  throw NotFound;
 }
 
 Json::Value& Json::Value::operator[](size_t i)
 {
-  if (type != List)
+  if (m_type != List)
     throw NotList;
 
-  return *(((ListType*)value)->begin() + i);
+  if (i >= ((ListType*)m_value)->size())
+    throw NotFound;
+
+  return *(((ListType*)m_value)->begin() + i);
 }
 
 const Json::Value& Json::Value::operator[](size_t i) const
 {
-  if (type != List)
+  if (m_type != List)
     throw NotList;
 
-  return *(((ListType*)value)->begin() + i);
+  if (i >= ((ListType*)m_value)->size())
+    throw NotFound;
+
+  return *(((ListType*)m_value)->begin() + i);
 }
 
 
 
 void Json::Value::clear()
 {
-  if (value == nullptr) {
-    type = Null;
+  if (m_value == nullptr) {
+    m_type = Null;
     return;
   }
 
-  switch (type)
+  switch (m_type)
   {
   case Bool:
-    delete (bool*)value;
+    delete (bool*)m_value;
     break;
   case Int:
-    delete (int64_t*)value;
+    delete (int64_t*)m_value;
     break;
   case Float:
-    delete (double*)value;
+    delete (double*)m_value;
     break;
   case String:
-    ((std::wstring*)value)->clear();
-    delete (std::wstring*)value;
+    ((std::wstring*)m_value)->clear();
+    delete (std::wstring*)m_value;
     break;
   case List:
-    delete (ListType*)value;
+    delete (ListType*)m_value;
     break;
   case Struct:
-    delete (StructType*)value;
+    delete (StructType*)m_value;
     break;
   default:
     break;
   }
-  type  = Null;
-  value = nullptr;
+  m_type  = Null;
+  m_value = nullptr;
 }
 
