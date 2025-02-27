@@ -9,20 +9,23 @@
 class Json::Property
 {
 public:
-
-  std::wstring Name;
-
   
   Property(const std::wstring &name, const Value &val);
   Property(const std::string  &name, const Value &val);
 
+  std::string  GetName () const { return Json::to_str(m_name); }
+  std::wstring GetNameW() const { return m_name; }
+
+  void SetName(const std::string  &name) { m_name = std::wstring(name.begin(), name.end()); }
+  void SetName(const std::wstring &name) { m_name = name; }
 
   Value&        GetValue()       { return m_value; }
   const Value&  GetValue() const { return m_value; }
 
 private:
 
-  Value m_value;
+  std::wstring m_name;
+  Value        m_value;
 
  
   friend std::wstring Json::serialize_property(

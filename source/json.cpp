@@ -86,7 +86,7 @@ bool Json::SerializeToFile(const std::wstring &path) const
 
 std::wstring Json::serialize_property(const Json::Property &prop)
 {
-  return L"\"" + format_out(prop.Name) + L"\":" + serialize_value(prop.m_value);
+  return L"\"" + format_out(prop.GetNameW()) + L"\":" + serialize_value(prop.m_value);
 }
 
 std::wstring Json::serialize_value(const Json::Value &val)
@@ -185,7 +185,7 @@ void Json::deserialize_property(
     }
 
 
-  prop->Name = format_in(std::wstring(name_first + 1, name_last));
+  prop->SetName(format_in(std::wstring(name_first + 1, name_last)));
   deserialize_value(
     std::wstring(
       value_first, value_last

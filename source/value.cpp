@@ -109,7 +109,7 @@ bool Json::Value::Contains(const std::wstring &prop_name) const
     return false;
 
   for (auto &prop : *(StructType*)m_value)
-    if (prop.Name == prop_name)
+    if (prop.GetNameW() == prop_name)
       return true;
 
   return false;
@@ -188,7 +188,7 @@ void Json::Value::RemoveProperty(const std::wstring &name)
     ((StructType*)m_value)->end(),
     [&](const Property &p_prop)
     {
-      return p_prop.Name == name;
+      return p_prop.GetNameW() == name;
     }
   );
   if (f == ((StructType*)m_value)->end())
@@ -244,7 +244,7 @@ Json::Value& Json::Value::operator[](const std::wstring &prop_name)
     throw NotStruct;
 
   for (auto &prop : *(StructType*)m_value)
-    if (prop.Name == prop_name)
+    if (prop.GetNameW() == prop_name)
       return prop.GetValue();
 
   ((StructType*)m_value)->push_back(Property(prop_name, Value()));
@@ -257,7 +257,7 @@ const Json::Value& Json::Value::operator[](const std::wstring &prop_name) const
     throw NotStruct;
 
   for (auto const &prop : *(StructType*)m_value)
-    if (prop.Name == prop_name)
+    if (prop.GetNameW() == prop_name)
       return prop.GetValue();
   
   throw NotFound;
