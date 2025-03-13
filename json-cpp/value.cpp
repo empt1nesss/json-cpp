@@ -200,6 +200,9 @@ void Json::Value::RemoveProperty(const std::wstring &name)
 
 Json::Value& Json::Value::operator=(const Json::Value& val)
 {
+  if (m_value)
+    clear();
+
   m_type = val.m_type;
   switch (val.m_type)
   {

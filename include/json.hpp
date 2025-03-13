@@ -2,8 +2,8 @@
 #define INCLUDE_JSON_HPP
 
 
-#include "../source/json.hpp"
-#include "../source/property.hpp"
+#include "../json-cpp/json.hpp"
+#include "../json-cpp/property.hpp"
 
 
 #endif // !INCLUDE_JSON_HPP

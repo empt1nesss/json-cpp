@@ -3,8 +3,8 @@ project(json-cpp)
 
 set(CMAKE_CXX_STANDARD 17)
 file(GLOB_RECURSE SOURCE_FILES
-  source/*.cpp
-  source/*.c
+  json-cpp/*.cpp
+  json-cpp/*.c
 )
 
 add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
@@ -13,6 +13,5 @@ target_include_directories(${PROJECT_NAME}
   PUBLIC
     include
   PRIVATE
-    source
+    json-cpp
 )
-
