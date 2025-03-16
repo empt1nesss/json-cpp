@@ -27,7 +27,9 @@ private:
   std::wstring m_name;
   Value        m_value;
 
- 
+  friend bool         Json::validate_property(
+    const std::wstring &json_str, std::string *log, uint64_t ln, uint64_t col
+  );
   friend std::wstring Json::serialize_property(
     const Property     &prop
   );

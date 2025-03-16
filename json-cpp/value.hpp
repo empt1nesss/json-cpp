@@ -33,24 +33,8 @@ public:
   Value(const StructType                      &val);
   Value(const std::initializer_list<Property> &val);
 
-  template <
-    typename T,
-    typename = std::enable_if_t<
-      std::is_integral_v<T>       ||
-      std::is_floating_point_v<T>
-    >
-  >
-  Value(T val)
-  {
-    if (std::is_integral_v<T>) {
-      m_type  = Int;
-      m_value = new int64_t(val);
-    }
-    else {
-      m_type  = Float;
-      m_value = new double(val);
-    }
-  }
+  template <typename T>
+  Value(T val);
 
   template <typename It>
   Value(It it_first, It it_last);
@@ -104,7 +88,9 @@ private:
 
   void clear();
 
-
+  friend bool         Json::validate_value(
+    const std::wstring &json_str, std::string *log, uint64_t ln, uint64_t col
+  );
   friend std::wstring Json::serialize_value(
     const Value        &val
   );
@@ -113,6 +99,28 @@ private:
   );
 
 };
+
+
+template <typename T>
+Json::Value::Value(T val)
+{
+  static_assert(
+    std::is_integral_v<T>       ||
+    std::is_floating_point_v<T>,
+    "Iterator value type must be "
+    "Json::Value or Json::Property"
+  );
+
+  if (std::is_integral_v<T>) {
+    m_type  = Int;
+    m_value = new int64_t(val);
+  }
+  else {
+    m_type  = Float;
+    m_value = new double(val);
+  }
+}
+
 
 template <typename It>
 Json::Value::Value(It it_first, It it_last)
@@ -164,4 +172,3 @@ Json::Value::Value(
 
 
 #endif // !SOURCE_VALUE_HPP
-

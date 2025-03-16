@@ -4,11 +4,19 @@
 
 #include <string>
 #include <vector>
+#include <filesystem>
 
 
 class Json
 {
 public:
+
+  enum class ERR
+  {
+    SUCCESS = 0,
+    BAD_PATH,
+    BAD_JSON
+  };
 
   enum ValueType
   {
@@ -27,27 +35,62 @@ public:
   typedef std::vector<Property> StructType;
   typedef std::vector<Value>    ListType;
 
+
+  static bool ValidateString(
+    const std::string &json_string
+  );
+  static bool ValidateString(
+    const std::wstring &json_string
+  );
+  static bool ValidateString(
+    const std::string &json_string, std::string &log
+  );
+  static bool ValidateString(
+    const std::wstring &json_string, std::string &log
+  );
+  static Json::ERR ValidateFile(
+    const std::filesystem::path &path
+  );
+  static Json::ERR ValidateFile(
+    const std::filesystem::path &path, std::string &log
+  );
+
+
   Json();
   ~Json();
 
 
-  void FromProperties(const StructType   &properties);
-  bool FromFile      (const std::string  &path);
-  bool FromFile      (const std::wstring &path);
-  void FromJsonString(const std::string  &json_string);
-  void FromJsonString(const std::wstring &json_string);
+  void Load          (const Value                 &val);
+  ERR  LoadFromFile  (const std::filesystem::path &path);
+  ERR  LoadFromString(const std::string           &json_string);
+  ERR  LoadFromString(const std::wstring          &json_string);
 
-  std::string   Serialize      ()                         const;
-  std::wstring  SerializeW     ()                         const;
-  bool          SerializeToFile(const std::wstring &path) const;
-  bool          SerializeToFile(const std::string  &path) const;
+  std::string   Serialize      ()                                  const;
+  std::wstring  SerializeW     ()                                  const;
+  bool          SerializeToFile(const std::filesystem::path &path) const;
 
-  Value&        GetData()       { return *m_properties; }
-  const Value&  GetData() const { return *m_properties; }
+  Value&        GetData()       { return *m_data; }
+  const Value&  GetData() const { return *m_data; }
 
 private:
 
-  Value *m_properties;
+  Value *m_data;
+
+  static std::string to_str(
+    const std::wstring &wstr
+  );
+  static bool read_file(
+    std::wstring &out, const std::filesystem::path &path
+  );
+  static bool validate(
+    const std::wstring &json_str, std::string *log=nullptr
+  );
+  static bool validate_property(
+    const std::wstring &json_str, std::string *log, uint64_t ln, uint64_t col
+  );
+  static bool validate_value(
+    const std::wstring &json_str, std::string *log, uint64_t ln, uint64_t col
+  );
 
   static std::wstring format_in (std::wstring json_str);
   static std::wstring format_out(std::wstring str);
@@ -64,8 +107,6 @@ private:
   static void deserialize_value(
     const std::wstring &json_str, Json::Value *val
   );
-
-  static std::string to_str(const std::wstring &wstr);
 
 };
 

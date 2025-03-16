@@ -10,69 +10,117 @@
 #include <locale>
 
 
+bool Json::ValidateString(const std::string &json_string)
+{
+  return ValidateString(
+    std::wstring(json_string.begin(), json_string.end())
+  );
+}
+
+bool Json::ValidateString(const std::wstring &json_string)
+{
+  return validate(json_string);
+}
+
+bool Json::ValidateString(const std::string &json_string, std::string &log)
+{
+  return ValidateString(
+    std::wstring(json_string.begin(), json_string.end()),
+    log
+  );
+}
+
+bool Json::ValidateString(const std::wstring &json_string, std::string &log)
+{
+  return validate(json_string, &log);
+}
+
+Json::ERR Json::ValidateFile(const std::filesystem::path &path)
+{
+  std::wstring json_str;
+  if (!read_file(json_str, path))
+    return ERR::BAD_PATH;
+
+  return validate(json_str) ? Json::ERR::SUCCESS : Json::ERR::BAD_JSON;
+}
+
+Json::ERR Json::ValidateFile(const std::filesystem::path &path, std::string &log)
+{
+  std::wstring json_str;
+  if (!read_file(json_str, path))
+    return ERR::BAD_PATH;
+
+  return validate(json_str, &log) ? Json::ERR::SUCCESS : Json::ERR::BAD_JSON;
+}
+
+
 Json::Json() :
-  m_properties(new Value(StructType()))
+  m_data(new Value())
 {}
 
 Json::~Json()
 {
-  delete m_properties;
+  delete m_data;
 }
 
 
-void Json::FromProperties(const StructType &properties)
+void Json::Load(const Value &val)
 {
-  *m_properties = properties;
+  *m_data = val;
 }
 
-bool Json::FromFile(const std::string &path)
+Json::ERR Json::LoadFromFile(const std::filesystem::path &path)
 {
-  return FromFile(std::wstring(path.begin(), path.end()));
-}
-
-bool Json::FromFile(const std::wstring &path)
-{
-  std::wifstream file(std::filesystem::path(path.c_str()));
-  file.imbue(std::locale("en_US.UTF-8"));
-  if (!file.is_open())
-    return false;
-
   std::wstring json_str;
-  for (std::wstring line; std::getline(file, line);)
-    json_str += line + L'\n';
+  if (!read_file(json_str, path))
+    return ERR::BAD_PATH;
 
-  FromJsonString(json_str);
-  return true;
+  return LoadFromString(json_str);
 }
 
-void Json::FromJsonString(const std::string &json_string)
+Json::ERR Json::LoadFromString(const std::string &json_string)
 {
-  deserialize_value(std::wstring(json_string.begin(), json_string.end()), m_properties);
+  return LoadFromString(std::wstring(json_string.begin(), json_string.end()));
 }
 
-void Json::FromJsonString(const std::wstring &json_string)
+Json::ERR Json::LoadFromString(const std::wstring &json_string)
 {
-  deserialize_value(json_string, m_properties);
+  std::string validator_log;
+  if (!validate(json_string, &validator_log))
+    return ERR::BAD_JSON;
+
+  auto st  = json_string.begin();
+  auto end = json_string.end();
+
+  while (
+    *st == L' ' || *st == L'\t' || *st == L'\r' || *st == L'\n'
+  ) {
+    ++st;
+  }
+
+  while (
+    *(end - 1) == L' ' || *(end - 1) == L'\t' || *(end - 1) == L'\r' || *(end - 1) == L'\n'
+  ) {
+    --end;
+  }
+
+  deserialize_value(std::wstring(st, end), m_data);
+  return ERR::SUCCESS;
 }
 
 std::string Json::Serialize() const
 {
-  return to_str(serialize_value(*m_properties));
+  return to_str(serialize_value(*m_data));
 }
 
 std::wstring Json::SerializeW() const
 {
-  return serialize_value(*m_properties);
+  return serialize_value(*m_data);
 }
 
-bool Json::SerializeToFile(const std::string &path) const
+bool Json::SerializeToFile(const std::filesystem::path &path) const
 {
-  return SerializeToFile(std::wstring(path.begin(), path.end()));
-}
-
-bool Json::SerializeToFile(const std::wstring &path) const
-{
-  std::wofstream file(std::filesystem::path(path.c_str()));
+  std::wofstream file(path);
   file.imbue(std::locale("en_US.UTF-8"));
   if (!file.is_open())
     return false;
@@ -83,6 +131,612 @@ bool Json::SerializeToFile(const std::wstring &path) const
 }
 
 
+
+std::string Json::to_str(const std::wstring &wstr)
+{
+  std::string out(wstr.size(), '\0');
+  for (size_t i = 0; i < wstr.size(); ++i) {
+    if (wstr[i] > 127)
+      out[i] = '?';
+    else
+     out[i] = wstr[i];
+  }
+
+  return out;
+}
+
+bool Json::read_file(std::wstring &out, const std::filesystem::path &path)
+{
+  std::wifstream file(path);
+
+  out.clear();
+  if (!file.is_open())
+    return false;
+
+  file.imbue(std::locale("en_US.UTF-8"));
+  for (std::wstring line; std::getline(file, line);)
+    out += line + L'\n';
+
+  file.close();
+  return true;
+}
+
+bool Json::validate(
+  const std::wstring &json_str, std::string *log
+)
+{
+  uint64_t ln  = 1;
+  uint64_t col = 0;
+
+  auto st  = json_str.begin();
+  auto end = json_str.end();
+
+  for (; st != json_str.end(); ++st) {
+    ++col;
+
+    bool br = false;
+    switch (*st)
+    {
+    case L' ':                  break;
+    case L'\t':                 break;
+    case L'\r': col = 0;        break;
+    case L'\n': col = 0;  ++ln; break;
+    default:
+      br = true;
+      break;
+    }
+    if (br)
+      break;
+  }
+
+  if (st == json_str.end()) {
+    if (log)
+      *log = "Empty json";
+    return false;
+  }
+
+  while (
+    *(end - 1) == L' ' || *(end - 1) == L'\t' || *(end - 1) == L'\r' || *(end - 1) == L'\n'
+  ) {
+    --end;
+  }
+
+  return validate_value(
+    std::wstring(st, end), log, ln, col
+  );
+}
+
+bool Json::validate_property(
+  const std::wstring &json_str, std::string *log, uint64_t ln, uint64_t col
+)
+{
+  const auto make_log = [](
+    const std::string &msg, size_t ln, size_t col
+  )
+  {
+    return msg + " (ln. " + std::to_string(ln) + ", col. " + std::to_string(col) + ")";
+  };
+
+  auto name_first = json_str.begin();
+  auto name_last  = json_str.end();
+  auto val_first  = json_str.end();
+  auto val_last   = json_str.end();
+
+  for (; name_first != json_str.end(); ++name_first) {
+    if (*name_first == L'\"') {
+      ++col;
+      break;
+    }
+    
+    switch (*name_first)
+    {
+    case L' ':                  break;
+    case L'\t':                 break;
+    case L'\r': col = 0;        break;
+    case L'\n': col = 0;  ++ln; break;
+    default:
+      if (log)
+        *log = make_log("Expected \'\"\'", ln, col);
+      return false;
+    }
+
+    ++col;
+  }
+
+  if (name_first == json_str.end()) {
+    if (log)
+      *log = make_log("Property is empty", ln, col);
+    return false;
+  }
+
+
+  bool esc = false;
+  ++col;
+  for (name_last = name_first + 1; name_last != json_str.end(); ++name_last) {
+    if (*name_last == L'\"' && !esc)
+      break;
+    
+    esc = *name_last == L'\\' && !esc;
+
+    switch (*name_last)
+    {
+    case L' ':                  break;
+    case L'\t':                 break;
+    case L'\r': col = 0;        break;
+    case L'\n': col = 0;  ++ln; break;
+    default:                    break;
+    }
+    ++col;
+  }
+
+  if (name_last == json_str.end()) {
+    if (log)
+      *log = make_log("Expected \'\"\'", ln, col);
+    return false;
+  }
+
+  uint64_t name_last_ln  = ln;
+  uint64_t name_last_col = col;
+
+  for (val_first = name_last + 1; val_first != json_str.end(); ++val_first) {
+    if (*val_first == L':') {
+      ++val_first;
+      break;
+    }
+
+    switch (*val_first)
+    {
+    case L' ':                  break;
+    case L'\t':                 break;
+    case L'\r': col = 0;        break;
+    case L'\n': col = 0;  ++ln; break;
+    default:
+      if (log)
+        *log = make_log("Expected \':\'", ln, col);
+      return false;
+    }
+
+    ++col;
+  }
+
+  if (val_first == json_str.end()) {
+    if (log)
+      *log = make_log("Expected \':\'", name_last_ln, name_last_col);
+    return false;
+  }
+
+  while (
+    *val_first == L' ' || *val_first == L'\t' || *val_first == L'\r' || *val_first == L'\n'
+  ) {
+    ++val_first;
+    if (val_first == json_str.end()) {
+      if (log)
+        *log = make_log("Expected value", ln, col);
+      return false;
+    }
+
+    switch (*val_first)
+    {
+    case L' ':                  break;
+    case L'\t':                 break;
+    case L'\r': col = 0;        break;
+    case L'\n': col = 0;  ++ln; break;
+    default:                    break;
+    }
+
+    ++col;
+  }
+
+  while (
+    *(val_last - 1) == L' ' || *(val_last - 1) == L'\t' || *(val_last - 1) == L'\r' || *(val_last - 1) == L'\n'
+  ) {
+    --val_last;
+  }
+
+  return validate_value(
+    std::wstring(val_first, val_last),
+    log,
+    ln,
+    col
+  );
+}
+
+bool Json::validate_value(
+  const std::wstring &json_str, std::string *log, uint64_t ln, uint64_t col
+)
+{
+  const auto make_log = [](
+    const std::string &msg, size_t ln, size_t col
+  )
+  {
+    return msg + " (ln. " + std::to_string(ln) + ", col. " + std::to_string(col) + ")";
+  };
+
+  const auto type_error = [&]()
+  {
+    if (log)
+      *log = make_log("Unknown type", ln, col);
+    return false;
+  };
+
+
+  if (json_str == L"null") {
+    return true;
+  }
+  else if (json_str == L"false") {
+    return true;
+  }
+  else if (json_str == L"true") {
+    return true;
+  }
+  else if (
+    (json_str[0] >= L'0' && json_str[0] <= L'9') || json_str[0] == L'-' || json_str[0] == L'.'
+  ) {
+    auto is_int = [](const std::wstring &str, bool is_signed)
+    {
+      size_t i = 0;
+
+      if (str.empty() || str == L"-")
+        return false;
+
+      if (is_signed && str[0] == L'-')
+        ++i;
+
+      for (; i < str.size(); ++i)
+        if (str[i] < L'0' || str[i] > L'9')
+          return false;
+
+      return true;
+    };
+
+    auto is_float = [&](const std::wstring &str)
+    {
+      if (str.empty() || str == L".")
+        return false;
+
+      auto point = str.find(L'.');
+      if (point == str.npos)
+        point = str.size();
+
+      if (point > 0) {
+        if (
+          !is_int(
+            std::wstring(str.begin(), str.begin() + point),
+            true
+          )
+        ) {
+          return false;
+        }
+      }
+      if (point < json_str.size() - 1) {
+        if (
+          !is_int(
+            std::wstring(str.begin() + point + 1, str.end()),
+            false
+          )
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+
+    auto fi_e = json_str.find(L'e');
+    if (fi_e == json_str.npos)
+      fi_e = json_str.size();
+
+    if (fi_e > 0) {
+      if (
+        !is_float(std::wstring(json_str.begin(), json_str.begin() + fi_e))
+      ) {
+        return type_error();
+      }
+    }
+    if (fi_e < json_str.size() - 1) {
+      if (
+        !is_int(
+          std::wstring(json_str.begin() + fi_e + 1, json_str.end()),
+          true
+        )
+      ) {
+        return type_error();
+      }
+    }
+
+    return true;
+  }
+  else if (json_str[0] == L'\"') {
+    bool quote = true;
+    bool esc   = false;
+
+    for (size_t i = 1; i < json_str.size(); ++i) {
+      if (!esc && json_str[i] == L'\"')
+        quote = !quote;
+      else if (quote)
+        esc = json_str[i] == L'\\' && !esc;
+      else {
+        if (
+          json_str[i] != L' ' && json_str[i] != L'\t' && json_str[i] != L'\r' && json_str[i] != L'\n'
+        ) {
+          return type_error();
+        }
+      }
+    }
+
+    if (quote)
+      return type_error();
+
+    return true;
+  }
+  else if (json_str[0] == L'[' || json_str[0] == L'{') {
+    uint64_t curly_br_c  = 0;
+    uint64_t square_br_c = 0;
+    uint64_t last_comma  = 0;
+    uint64_t ln_comma    = ln;
+    uint64_t col_comma   = col;
+    bool     str         = false;
+    bool     esc         = false;
+
+    for (size_t i = 1; i < json_str.size(); ++i) {
+      if (!str) {
+        if (json_str[i] == L'{')
+          ++curly_br_c;
+        else if (json_str[i] == L'}')
+          --curly_br_c;
+        else if (json_str[i] == L'[')
+          ++square_br_c;
+        else if (json_str[i] == L']')
+          --square_br_c;
+        else if (curly_br_c == 0 && square_br_c == 0 && json_str[i] == L',') {
+          auto val_st  = json_str.begin() + last_comma + 1;
+          auto val_end = json_str.begin() + i;
+
+          uint64_t val_ln  = ln_comma;
+          uint64_t val_col = col_comma + 1;
+
+          ln_comma  = ln;
+          col_comma = col;
+
+          last_comma = i;
+
+          while (
+            *val_st == L' ' || *val_st == L'\t' || *val_st == L'\r' || *val_st == L'\n'
+          ) {
+            switch (*val_st)
+            {
+            case L' ':                          break;
+            case L'\t':                         break;
+            case L'\r': val_col = 0;            break;
+            case L'\n': val_col = 0;  ++val_ln; break;
+            default:                            break;
+            }
+
+            ++val_st;
+            ++val_col;
+          }
+          while (
+            *(val_end - 1) == L' ' || *(val_end - 1) == L'\t' || *(val_end - 1) == L'\r' || *(val_end - 1) == L'\n'
+          ) {
+            --val_end;
+          }
+
+          if (json_str[0] == L'[') {
+            if (
+              !validate_value(
+                std::wstring(val_st, val_end),
+                log,
+                val_ln,
+                val_col
+              )
+            ) {
+              return false;
+            }
+          }
+          else {
+            if (
+              !validate_property(
+                std::wstring(val_st, val_end),
+                log,
+                val_ln,
+                val_col
+              )
+            ) {
+              return false;
+            }
+          }
+        }
+      }
+
+      if (!esc && json_str[i] == L'\"')
+        str = !str;
+      else if (str)
+        esc = json_str[i] == L'\\' && !esc;
+
+      switch (json_str[i])
+      {
+      case L'\t':                 break;
+      case L'\r': col = 0;        break;
+      case L'\n': col = 0;  ++ln; break;
+      default:                    break;
+      }
+
+      ++col;
+    }
+
+    if (json_str[0] == L'[') {
+      if (*(json_str.end() - 1) != L']') {
+        if (log)
+          *log = make_log("Expected ']'", ln, col);
+        return false;
+      }
+    }
+    else {
+      if (*(json_str.end() - 1) != L'}') {
+        if (log)
+          *log = make_log("Expected '}'", ln, col);
+        return false;
+      }
+    }
+
+    bool is_comma = json_str[last_comma] == L',';
+    auto val_st   = json_str.begin() + last_comma + 1;
+    auto val_end  = json_str.end() - 1;
+
+    uint64_t val_ln  = ln_comma;
+    uint64_t val_col = col_comma + 1;
+
+    while (
+      *val_st == L' ' || *val_st == L'\t' || *val_st == L'\r' || *val_st == L'\n'
+    ) {
+      switch (*val_st)
+      {
+      case L' ':                          break;
+      case L'\t':                         break;
+      case L'\r': val_col = 0;            break;
+      case L'\n': val_col = 0;  ++val_ln; break;
+      default:                            break;
+      }
+
+      ++val_st;
+      ++val_col;
+    }
+    while (
+      *(val_end - 1) == L' ' || *(val_end - 1) == L'\t' || *(val_end - 1) == L'\r' || *(val_end - 1) == L'\n'
+    ) {
+      --val_end;
+    }
+
+    if (
+      val_end == json_str.begin() + last_comma + 1 &&
+      val_st  == json_str.end() - 1
+    ) {
+      if (is_comma) {
+        if (log) {
+          if (json_str[0] == L'[') {
+            *log = make_log(
+              "Expected value", val_ln, val_col
+            );
+          }
+          else {
+            *log = make_log(
+              "Expected property", val_ln, val_col
+            );
+          }
+        }
+        return false;
+      }
+
+      return true;
+    }
+
+    if (json_str[0] == L'[') {
+      return validate_value(
+        std::wstring(val_st, val_end),
+        log,
+        val_ln,
+        val_col
+      );
+    }
+    
+    return validate_property(
+      std::wstring(val_st, val_end),
+      log,
+      val_ln,
+      val_col
+    );
+  }
+
+  return type_error();
+}
+
+std::wstring Json::format_in(std::wstring json_str)
+{
+  if (json_str.size() < 2)
+    return json_str;
+
+  for (size_t i = 0; i < json_str.size() - 1; ++i) {
+    if (json_str[i] == L'\\') {
+      switch (json_str[i + 1])
+      {
+      case L'\"':
+        json_str.erase(json_str.begin() + i);
+        break;
+      case L'\\':
+        json_str.erase(json_str.begin() + i);
+        break;
+      case L'/':
+        json_str.erase(json_str.begin() + i);
+        break;
+      case L'b':
+        json_str.erase(json_str.begin() + i);
+        json_str[i] = L'\b';
+        break;
+      case L'f':
+        json_str.erase(json_str.begin() + i);
+        json_str[i] = L'\f';
+        break;
+      case L'n':
+        json_str.erase(json_str.begin() + i);
+        json_str[i] = L'\n';
+        break;
+      case L'r':
+        json_str.erase(json_str.begin() + i);
+        json_str[i] = L'\r';
+        break;
+      case L't':
+        json_str.erase(json_str.begin() + i);
+        json_str[i] = L'\t';
+        break;
+      default:
+        break;
+      }
+    }
+  }
+
+  return json_str;
+}
+
+std::wstring Json::format_out(std::wstring str)
+{
+  for (size_t i = 0; i < str.size(); ++i) {
+    switch (str[i])
+    {
+    case L'\"':
+    case L'\\':
+    case L'/':
+      str.insert(str.begin() + i + 1, str[i]);
+      str[i++] = L'\\';
+      break;
+    case L'\b':
+      str.insert(str.begin() + i + 1, L'b');
+      str[i++] = L'\\';
+      break;
+    case L'\f':
+      str.insert(str.begin() + i + 1, L'f');
+      str[i++] = L'\\';
+      break;
+    case L'\n':
+      str.insert(str.begin() + i + 1, L'n');
+      str[i++] = L'\\';
+      break;
+    case L'\r':
+      str.insert(str.begin() + i + 1, L'r');
+      str[i++] = L'\\';
+      break;
+    case L'\t':
+      str.insert(str.begin() + i + 1, L't');
+      str[i++] = L'\\';
+      break;
+      
+    default:
+      break;
+    }
+  }
+
+  return str;
+}
 
 std::wstring Json::serialize_property(const Json::Property &prop)
 {
@@ -152,45 +806,45 @@ void Json::deserialize_property(
       "deserialize_property was called with null argument"
     );
 
-  std::wstring::const_iterator name_first   = json_str.end();
-  std::wstring::const_iterator name_last    = json_str.end();
-  std::wstring::const_iterator value_first  = json_str.end();
-  std::wstring::const_iterator value_last   = json_str.end();
+  auto name_first   = json_str.begin();
+  auto name_last    = json_str.end();
+  auto val_first    = json_str.end();
+  auto val_last     = json_str.end();
 
-  bool value = false;
+  bool esc = false;
 
-  for (auto it = json_str.begin(); it != json_str.end(); ++it) {
-    if (*it == L'\"') {
-      if (name_first == json_str.end())
-        name_first = it;
-      else if (name_last == json_str.end())
-        name_last = it;
-    }
-
-    if (*it == L':') {
-      value = true;
-      continue;
-    }
-
-    if (value && *it != L' ' && *it != L'\n') {
-      value_first = it;
+  for (; name_first != json_str.end(); ++name_first)
+    if (*name_first == L'\"')
       break;
-    }
+  
+  for (name_last = name_first + 1; name_last != json_str.end(); ++name_last) {
+    if (*name_last == L'\"' && !esc)
+      break;
+
+    esc = *name_last == L'\\' && !esc;
   }
 
-  for (--value_last; value_last != json_str.begin(); --value_last)
-    if (*value_last != L' ' && *value_last != L'\n') {
-      ++value_last;
+  for (val_first = name_last + 1; val_first != json_str.end(); ++val_first)
+    if (*val_first == L':')
       break;
-    }
+  
+  ++val_first;
+  while (
+    *val_first == L' ' || *val_first == L'\t' || *val_first == L'\r' || *val_first == L'\n'
+  ) {
+    ++val_first;
+  }
+
+  while (
+    *(val_last - 1) == L' ' || *(val_last - 1) == L'\t' || *(val_last - 1) == L'\r' || *(val_last - 1) == L'\n'
+  ) {
+    --val_last;
+  }
 
 
   prop->SetName(format_in(std::wstring(name_first + 1, name_last)));
   deserialize_value(
-    std::wstring(
-      value_first, value_last
-    ),
-    &prop->m_value
+    std::wstring(val_first, val_last), &prop->m_value
   );
 }
 
@@ -214,7 +868,9 @@ void Json::deserialize_value(
   else if (json_str == L"true") {
     *val = Json::Value(true);
   }
-  else if ((json_str[0] >= L'0' && json_str[0] <= L'9') || json_str[0] == L'-') {
+  else if (
+    (json_str[0] >= L'0' && json_str[0] <= L'9') || json_str[0] == L'-' || json_str[0] == L'.'
+  ) {
     if (json_str.find(L'.') == json_str.npos) {
       *val = Json::Value((int64_t)std::stoll(json_str));
     }
@@ -223,240 +879,133 @@ void Json::deserialize_value(
     }
   }
   else if (json_str[0] == L'\"') {
-    val->m_type = Json::String;
-    val->m_value = new std::wstring(json_str.begin() + 1, json_str.end() - 1);
-    *(std::wstring*)val->m_value = format_in(*(std::wstring*)val->m_value);
-  }
-  else if (json_str[0] == L'[') {
-    val->m_type   = Json::List;
-    val->m_value  = new ListType;
-    
-    bool empty = true;
+    size_t       st  = 1,    end = json_str.size();
+    bool         esc = false;
+    std::wstring res;
+
     for (size_t i = 1; i < json_str.size(); ++i) {
-      if (json_str[i] == ' ' || json_str[i] == '\n')
-        continue;
-      else if (json_str[i] == ']')
-        break;
-      else {
-        empty = false;
-        break;
+      if (!esc && json_str[i] == L'\"') {
+        if (end == json_str.size()) {
+          end = i;
+          res += std::wstring(json_str.begin() + st, json_str.begin() + end);
+        }
+        else {
+          end = json_str.size();
+          st = i + 1;
+        }
       }
+
+      esc = json_str[i] == L'\\' && !esc;
     }
 
-    if (empty)
-      return;
-
-    auto val_st = json_str.end();
-
-    bool     quote          = false;
-    uint64_t square_bracket = 0;
-    uint64_t curly_bracket  = 0;
-    for (auto it = json_str.begin() + 1; it != json_str.end() - 1; ++it) {
-      if (quote && *it == L'\\') {
-        ++it;
-        continue;
-      }
-
-      if (*it != L' ' && *it != L'\n' && val_st == json_str.end())
-        val_st = it;
-
-      if (*it == L'\"')
-        quote = !quote;
-      else if (*it == L'[')
-        ++square_bracket;
-      else if (*it == L']')
-        --square_bracket;
-      else if (*it == L'{')
-        ++curly_bracket;
-      else if (*it == L'}')
-        --curly_bracket;
-      else if (*it == L',' && !quote && square_bracket == 0 && curly_bracket == 0) {
-        Json::Value _val;
-        deserialize_value(std::wstring(val_st, it), &_val);
-        ((ListType*)(val->m_value))->push_back(_val);
-        val_st = json_str.end();
-      }
-    }
-
-    auto val_end = json_str.end() - 1;
-    for (; val_end != json_str.begin(); --val_end)
-      if (*val_end == L']')
-        break;
-
-    Json::Value _val;
-    deserialize_value(std::wstring(val_st, val_end), &_val);
-    ((ListType*)(val->m_value))->push_back(_val);
+    val->m_type  = Json::String;
+    val->m_value = new std::wstring(format_in(res));
   }
-  else if (json_str[0] == L'{') {
-    val->m_type   = Json::Struct;
-    val->m_value  = new StructType;
+  else if (json_str[0] == L'[' || json_str[0] == L'{') {
+    uint64_t square_br_c = 0;
+    uint64_t curly_br_c  = 0;
+    uint64_t last_comma  = 0;
+    bool     str         = false;
+    bool     esc         = false;
 
-    bool empty = true;
+    if (json_str[0] == L'[') {
+      val->m_type   = Json::List;
+      val->m_value  = new ListType;
+    }
+    else {
+      val->m_type   = Json::Struct;
+      val->m_value  = new StructType;
+    }
+
     for (size_t i = 1; i < json_str.size(); ++i) {
-      if (json_str[i] == ' ' || json_str[i] == '\n')
-        continue;
-      else if (json_str[i] == '}')
-        break;
-      else {
-        empty = false;
-        break;
+      if (!str) {
+        if (json_str[i] == L'[')
+          ++square_br_c;
+        else if (json_str[i] == L']')
+          --square_br_c;
+        else if (json_str[i] == L'{')
+          ++curly_br_c;
+        else if (json_str[i] == L'}')
+          --curly_br_c;
+        else if (square_br_c == 0 && curly_br_c == 0 && json_str[i] == L',') {
+          auto val_st  = json_str.begin() + last_comma + 1;
+          auto val_end = json_str.begin() + i;
+
+          last_comma = i;
+
+          while (
+            *val_st == L' ' || *val_st == L'\t' || *val_st == L'\r' || *val_st == L'\n'
+          ) {
+            ++val_st;
+          }
+          while (
+            *(val_end - 1) == L' ' || *(val_end - 1) == L'\t' || *(val_end - 1) == L'\r' || *(val_end - 1) == L'\n'
+          ) {
+            --val_end;
+          }
+
+          if (json_str[0] == L'[') {
+            Json::Value _val;
+            deserialize_value(
+              std::wstring(val_st, val_end),
+              &_val
+            );
+            ((ListType*)(val->m_value))->push_back(_val);
+          }
+          else {
+            Json::Property _prop(L"", Json::Value());
+            deserialize_property(
+              std::wstring(val_st, val_end),
+              &_prop
+            );
+            ((StructType*)(val->m_value))->push_back(_prop);
+          }
+        }
       }
+
+      if (!esc && json_str[i] == L'\"')
+        str = !str;
+
+      if (str)
+        esc = json_str[i] == L'\\' && !esc;
     }
 
-    if (empty)
+    auto val_st   = json_str.begin() + last_comma + 1;
+    auto val_end  = json_str.end() - 1;
+
+    while (
+      *val_st == L' ' || *val_st == L'\t' || *val_st == L'\r' || *val_st == L'\n'
+    ) {
+      ++val_st;
+    }
+    while (
+      *(val_end - 1) == L' ' || *(val_end - 1) == L'\t' || *(val_end - 1) == L'\r' || *(val_end - 1) == L'\n'
+    ) {
+      --val_end;
+    }
+
+    if (
+      val_end == json_str.begin() + last_comma + 1 &&
+      val_st  == json_str.end() - 1
+    ) {
       return;
-
-    auto prop_st = json_str.end();
-
-    bool     quote          = false;
-    uint64_t square_bracket = 0;
-    uint64_t curly_bracket  = 0;
-    for (auto it = json_str.begin() + 1; it != json_str.end() - 1; ++it) {
-      if (quote && *it == L'\\') {
-        ++it;
-        continue;
-      }
-
-      if (*it != L' ' && *it != L'\n' && prop_st == json_str.end())
-        prop_st = it;
-
-      if (*it == L'\"')
-        quote = !quote;
-      else if (*it == L'[')
-        ++square_bracket;
-      else if (*it == L']')
-        --square_bracket;
-      else if (*it == L'{')
-        ++curly_bracket;
-      else if (*it == L'}')
-        --curly_bracket;
-      else if (*it == L',' && !quote && square_bracket == 0 && curly_bracket == 0) {
-        Json::Property _prop(L"", Json::Value());
-        deserialize_property(std::wstring(prop_st, it), &_prop);
-  
-        ((StructType*)(val->m_value))->push_back(_prop);
-        prop_st = json_str.end();
-      }
     }
 
-    auto prop_end = json_str.end() - 1;
-    for (; prop_end != json_str.begin(); --prop_end)
-      if (*prop_end == L'}')
-        break;
-
-    Json::Property _prop(L"", Json::Value());
-    deserialize_property(std::wstring(prop_st, prop_end), &_prop);
-    ((StructType*)(val->m_value))->push_back(_prop);
-  }
-}
-
-
-
-std::wstring Json::format_in(std::wstring json_str)
-{
-  if (json_str.size() < 2)
-    return json_str;
-
-  for (size_t i = 0; i < json_str.size() - 1; ++i) {
-    if (json_str[i] == L'\\') {
-      switch (json_str[i])
-    {
-    case L'\"':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'\"';
-      break;
-    case L'\\':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'\\';
-      break;
-    case L'/':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'/';
-      break;
-    case L'\b':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'\b';
-      break;
-    case L'\f':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'\f';
-      break;
-    case L'\n':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'\n';
-      break;
-    case L'\r':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'\r';
-      break;
-    case L'\t':
-      json_str.erase(json_str.begin() + i);
-      json_str[i] = L'\t';
-      break;
-    default:
-      break;
+    if (json_str[0] == L'[') {
+      Json::Value _val;
+      deserialize_value(
+        std::wstring(val_st, val_end),
+        &_val
+      );
+      ((ListType*)(val->m_value))->push_back(_val);
     }
+    else {
+      Json::Property _prop(L"", Json::Value());
+      deserialize_property(
+        std::wstring(val_st, val_end),
+        &_prop
+      );
+      ((StructType*)(val->m_value))->push_back(_prop);
     }
   }
-
-  return json_str;
 }
-
-std::wstring Json::format_out(std::wstring str)
-{
-  for (size_t i = 0; i < str.size(); ++i) {
-    switch (str[i])
-    {
-    case L'\"':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L'\"');
-      break;
-    case L'\\':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L'\\');
-      break;
-    case L'/':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L'/');
-      break;
-    case L'\b':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L'b');
-      break;
-    case L'\f':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L'f');
-      break;
-    case L'\n':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L'n');
-      break;
-    case L'\r':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L'r');
-      break;
-    case L'\t':
-      str[i++] = L'\\';
-      str.insert(str.begin() + i, L't');
-      break;
-    default:
-      break;
-    }
-  }
-
-  return str;
-}
-
-std::string Json::to_str(const std::wstring &wstr)
-{
-  std::string out(wstr.size(), '\0');
-  for (size_t i = 0; i < wstr.size(); ++i) {
-    if (wstr[i] > 127)
-      out[i] = '?';
-    else
-     out[i] = wstr[i];
-  }
-
-  return out;
-}
-

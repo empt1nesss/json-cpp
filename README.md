@@ -14,9 +14,9 @@ struct Coords
 
   Json::Value Serialize()
   {
-    return {
-      Json::Property("x", x),
-      Json::Property("y", y)
+    return Json::StructType{
+      { "x", x },
+      { "y", y }
     };
   }
 };
@@ -28,7 +28,7 @@ int main()
 
   Json j;
 
-  j.FromProperties({
+  j.Load(Json::StructType{
     { "coords", c.Serialize() }
   });
   j.GetData()["five"] = 5;
@@ -38,4 +38,3 @@ int main()
   return 0;
 }
 ```
-
