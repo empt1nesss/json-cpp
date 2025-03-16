@@ -223,10 +223,8 @@ bool Json::validate_property(
   auto val_last   = json_str.end();
 
   for (; name_first != json_str.end(); ++name_first) {
-    if (*name_first == L'\"') {
-      ++col;
+    if (*name_first == L'\"')
       break;
-    }
     
     switch (*name_first)
     {
@@ -278,9 +276,16 @@ bool Json::validate_property(
   uint64_t name_last_ln  = ln;
   uint64_t name_last_col = col;
 
+  ++col;
   for (val_first = name_last + 1; val_first != json_str.end(); ++val_first) {
     if (*val_first == L':') {
       ++val_first;
+      if (val_first == json_str.end()) {
+        if (log)
+          *log = make_log("Expected value", ln, col);
+        return false;
+      }
+      ++col;
       break;
     }
 
@@ -301,7 +306,7 @@ bool Json::validate_property(
 
   if (val_first == json_str.end()) {
     if (log)
-      *log = make_log("Expected \':\'", name_last_ln, name_last_col);
+      *log = make_log("Expected \':\'", name_last_ln, name_last_col + 1);
     return false;
   }
 
@@ -479,6 +484,7 @@ bool Json::validate_value(
     bool     str         = false;
     bool     esc         = false;
 
+    ++col;
     for (size_t i = 1; i < json_str.size(); ++i) {
       if (!str) {
         if (json_str[i] == L'{')
