@@ -79,7 +79,7 @@ public:
 
   Value&        operator[] (size_t i);
   const Value&  operator[] (size_t i) const;
-  
+
 private:
 
   ValueType m_type;

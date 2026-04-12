@@ -131,6 +131,37 @@ bool Json::SerializeToFile(const std::filesystem::path &path) const
 }
 
 
+Json::Value& Json::operator[](const std::string  &prop_name)
+{
+  return GetData()[prop_name];
+}
+
+const Json::Value& Json::operator[](const std::string  &prop_name) const
+{
+  return GetData()[prop_name];
+}
+
+Json::Value& Json::operator[](const std::wstring &prop_name)
+{
+  return GetData()[prop_name];
+}
+
+const Json::Value& Json::operator[](const std::wstring &prop_name) const
+{
+  return GetData()[prop_name];
+}
+
+Json::Value& Json::operator[](size_t i)
+{
+  return GetData()[i];
+}
+
+const Json::Value& Json::operator[](size_t i) const
+{
+  return GetData()[i];
+}
+
+
 
 std::string Json::to_str(const std::wstring &wstr)
 {

@@ -72,6 +72,14 @@ public:
   Value&        GetData()       { return *m_data; }
   const Value&  GetData() const { return *m_data; }
 
+  Value&        operator[] (const std::string  &prop_name);
+  const Value&  operator[] (const std::string  &prop_name) const;
+  Value&        operator[] (const std::wstring &prop_name);
+  const Value&  operator[] (const std::wstring &prop_name) const;
+
+  Value&        operator[] (size_t i);
+  const Value&  operator[] (size_t i) const;
+
 private:
 
   Value *m_data;
